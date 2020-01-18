@@ -8,7 +8,8 @@ import { hasValue } from "./validator";
 export interface ICommandOption {
   arg: string;
   description: string;
-  required: boolean;
+  defaultValue?: string | number | boolean;
+  required?: boolean;
 }
 
 /**
@@ -47,7 +48,11 @@ export const build = (
   const options = decorator.options;
   Object.getOwnPropertyNames(options).forEach(name => {
     const opt = options[name];
-    cmd.option(opt.arg, opt.description);
+    if (opt.defaultValue !== undefined) {
+      cmd.option(opt.arg, opt.description, opt.defaultValue);
+    } else {
+      cmd.option(opt.arg, opt.description);
+    }
   });
   return cmd;
 };

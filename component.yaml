@@ -1,0 +1,6 @@
+name: default-component
+subcomponents:
+  - name: cloud-native
+    method: git
+    source: "https://github.com/microsoft/fabrikate-definitions.git"
+    path: definitions/fabrikate-cloud-native

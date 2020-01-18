@@ -1,5 +1,6 @@
 import commander from "commander";
 
+import { build } from "../../lib/commandBuilder";
 import {
   generateDefaultHldComponentYaml,
   generateGitIgnoreFile,
@@ -7,42 +8,30 @@ import {
 } from "../../lib/fileutils";
 import { checkoutCommitPushCreatePRLink } from "../../lib/gitutils";
 import { logger } from "../../logger";
+import decorator from "./init.decorator.json";
 
-/**
- * Adds the init command to the hld command object
- *
- * @param command Commander command object to decorate
- */
-export const initCommandDecorator = (command: commander.Command): void => {
-  command
-    .command("init")
-    .alias("i")
-    .description(
-      "Initialize your hld repository. Will add the manifest-generation.yaml file to your working directory/repository if it does not already exist."
-    )
-    .option(
-      "--git-push",
-      "SPK CLI will try to commit and push these changes to a new origin/branch.",
-      false
-    )
-    .action(async opts => {
-      const { gitPush = false } = opts;
-      const projectPath = process.cwd();
-      try {
-        // Type check all parsed command line args here.
-        if (typeof gitPush !== "boolean") {
-          throw new Error(
-            `gitPush must be of type boolean, ${typeof gitPush} given.`
-          );
-        }
-        await initialize(projectPath, gitPush);
-      } catch (err) {
-        logger.error(
-          `Error occurred while initializing hld repository ${projectPath}`
-        );
-        logger.error(err);
-      }
-    });
+// values that we need to pull out from command operator
+interface ICommandOptions {
+  gitPush: boolean | undefined;
+}
+
+const execute = async (opts: ICommandOptions) => {
+  const { gitPush = false } = opts;
+  // gitPath will always be boolean type, this is enforced by commander.
+  const projectPath = process.cwd();
+
+  try {
+    await initialize(projectPath, gitPush);
+  } catch (err) {
+    logger.error(
+      `Error occurred while initializing hld repository ${projectPath}`
+    );
+    logger.error(err);
+  }
+};
+
+export const commandDecorator = (command: commander.Command): void => {
+  build(command, decorator).action(execute);
 };
 
 export const initialize = async (rootProjectPath: string, gitPush: boolean) => {
