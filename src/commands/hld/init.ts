@@ -22,11 +22,13 @@ const execute = async (opts: ICommandOptions) => {
 
   try {
     await initialize(projectPath, gitPush);
+    process.exit(0);
   } catch (err) {
     logger.error(
       `Error occurred while initializing hld repository ${projectPath}`
     );
     logger.error(err);
+    process.exit(1);
   }
 };
 

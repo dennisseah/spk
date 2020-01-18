@@ -8,6 +8,7 @@ import {
 interface ICommandOption {
   flags: string;
   description: string;
+  defaultValue?: boolean | string | number;
 }
 
 describe("Tests Command Builder's build function", () => {
@@ -31,6 +32,21 @@ describe("Tests Command Builder's build function", () => {
           arg: "-c, --optionC <optionC>",
           description: "description for optionC",
           required: false
+        },
+        optionD: {
+          arg: "-d, --optionD <optionD>",
+          defaultValue: false,
+          description: "description for optionD"
+        },
+        optionE: {
+          arg: "-e, --optionE <optionE>",
+          defaultValue: "test",
+          description: "description for optionE"
+        },
+        optionF: {
+          arg: "-f, --optionF <optionF>",
+          defaultValue: 10,
+          description: "description for optionF"
         }
       }
     };
@@ -39,6 +55,7 @@ describe("Tests Command Builder's build function", () => {
       descriptor.options
     ).map((name: string) => {
       return {
+        defaultValue: descriptor.options[name].defaultValue,
         description: descriptor.options[name].description,
         flags: descriptor.options[name].arg
       };
@@ -50,6 +67,7 @@ describe("Tests Command Builder's build function", () => {
     cmd.options.forEach((opt: ICommandOption, i: number) => {
       expect(opt.flags).toBe(options[i].flags);
       expect(opt.description).toBe(options[i].description);
+      expect(opt.defaultValue).toBe(options[i].defaultValue);
     });
   });
 });
