@@ -20,45 +20,37 @@ import decorator from "./create-variable-group.decorator.json";
 
 // values that we need to pull out from command operator
 interface ICommandOptions {
-  registryName: string | undefined;
-  servicePrincipalId: string | undefined;
-  servicePrincipalPassword: string | undefined;
-  tenant: string | undefined;
-  hldRepoUrl: string | undefined;
-  orgName: string | undefined;
-  personalAccessToken: string | undefined;
-  project: string | undefined;
+  [key: string]: string | undefined;
 }
 
-/**
- * Returns an array of error message for missing variable values. Returns empty
- * array if all values are present.
- *
- * @param registryName The Azure container registry name
- * @param hldRepoUrl High Level Definition URL
- * @param servicePrincipalId The Azure service principla id with ACR pull and build permissions for az login
- * @param servicePrincipalPassword The service principla password for az login
- * @param tenantId The Azure AD tenant id for az login
- * @param accessOpts Azure DevOp options
- */
-export const validateRequiredArguments = (
-  registryName: string | undefined,
-  hldRepoUrl: string | undefined,
-  servicePrincipalId: string | undefined,
-  servicePrincipalPassword: string | undefined,
-  tenant: string | undefined,
-  accessOpts: IAzureDevOpsOpts
-): string[] => {
-  return validateForRequiredValues(decorator, {
-    "hld-repo-url": hldRepoUrl,
-    "organization-name": accessOpts.orgName,
-    "personal-access-token": accessOpts.personalAccessToken,
-    project: accessOpts.project,
-    "registry-name": registryName,
-    "service-principal-id": servicePrincipalId,
-    "service-principal-password": servicePrincipalPassword,
+const fetchValues = async (opts: ICommandOptions): Promise<ICommandOptions> => {
+  const { azure_devops } = Config();
+
+  const {
+    registryName,
+    servicePrincipalId,
+    servicePrincipalPassword,
+    tenant,
+    hldRepoUrl = azure_devops && azure_devops.hld_repository,
+    orgName = azure_devops && azure_devops.org,
+    personalAccessToken = azure_devops && azure_devops.access_token,
+    project = azure_devops && azure_devops.project
+  } = opts;
+
+  return {
+    hldRepoUrl,
+    orgName,
+    personalAccessToken,
+    project,
+    registryName,
+    servicePrincipalId,
+    servicePrincipalPassword,
     tenant
-  });
+  };
+};
+
+export const validateValues = (values: ICommandOptions): string[] => {
+  return validateForRequiredValues(decorator, values);
 };
 
 /**
@@ -69,48 +61,21 @@ export const validateRequiredArguments = (
  */
 const execute = async (variableGroupName: string, opts: ICommandOptions) => {
   try {
-    const { azure_devops } = Config();
-
-    const {
-      registryName,
-      servicePrincipalId,
-      servicePrincipalPassword,
-      tenant,
-      hldRepoUrl = azure_devops && azure_devops.hld_repository,
-      orgName = azure_devops && azure_devops.org,
-      personalAccessToken = azure_devops && azure_devops.access_token,
-      project = azure_devops && azure_devops.project
-    } = opts;
+    const values = await fetchValues(opts);
+    const errors = validateValues(values);
+    if (errors.length !== 0) {
+      process.exit(1);
+    }
 
     const accessOpts: IAzureDevOpsOpts = {
-      orgName,
-      personalAccessToken,
-      project
+      orgName: values.orgName,
+      personalAccessToken: values.personalAccessToken,
+      project: values.project
     };
 
     logger.debug(`access options: ${JSON.stringify(accessOpts)}`);
 
-    const errors = validateRequiredArguments(
-      registryName,
-      hldRepoUrl,
-      servicePrincipalId,
-      servicePrincipalPassword,
-      tenant,
-      accessOpts
-    );
-
-    if (errors.length !== 0) {
-      process.exit(1);
-    }
-    const variableGroup = await create(
-      variableGroupName,
-      registryName,
-      hldRepoUrl,
-      servicePrincipalId,
-      servicePrincipalPassword,
-      tenant,
-      accessOpts
-    );
+    const variableGroup = await create(variableGroupName, values, accessOpts);
 
     // set the variable group name
     const projectPath = process.cwd();
@@ -143,20 +108,12 @@ export const commandDecorator = (command: commander.Command): void => {
  * Creates a Azure DevOps variable group
  *
  * @param variableGroupName The Azure DevOps varible group name
- * @param registryName The Azure container registry name
- * @param hldRepoUrl The HLD repo url
- * @param servicePrincipalId The Azure service principal id with ACR pull and build permissions for az login
- * @param servicePrincipalPassword The service principal password for az login
- * @param tenantId The Azure AD tenant id for az login
+ * @param values value from Command line.
  * @param accessOpts Azure DevOps access options from command options to override spk config
  */
 export const create = async (
   variableGroupName: string,
-  registryName: string | undefined,
-  hldRepoUrl: string | undefined,
-  servicePrincipalId: string | undefined,
-  servicePrincipalPassword: string | undefined,
-  tenantId: string | undefined,
+  values: ICommandOptions,
   accessOpts: IAzureDevOpsOpts
 ): Promise<VariableGroup> => {
   logger.info(
@@ -165,10 +122,10 @@ export const create = async (
   try {
     const vars: IVariableGroupDataVariable = {
       ACR_NAME: {
-        value: registryName
+        value: values.registryName
       },
       HLD_REPO: {
-        value: hldRepoUrl
+        value: values.hldRepoUrl
       },
       PAT: {
         isSecret: true,
@@ -176,15 +133,15 @@ export const create = async (
       },
       SP_APP_ID: {
         isSecret: true,
-        value: servicePrincipalId
+        value: values.servicePrincipalId
       },
       SP_PASS: {
         isSecret: true,
-        value: servicePrincipalPassword
+        value: values.servicePrincipalPassword
       },
       SP_TENANT: {
         isSecret: true,
-        value: tenantId
+        value: values.tenantId
       }
     };
     const variableGroupData: IVariableGroupData = {

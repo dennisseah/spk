@@ -16,7 +16,7 @@ import { logger } from "../logger";
  * @param args Arguments to pass to the command
  * @param opts Options to pass to child_process.spawn()
  */
-export const exec = async (
+export const exec = (
   cmd: string,
   args: string[] = [],
   opts: child_process.SpawnOptions = {}

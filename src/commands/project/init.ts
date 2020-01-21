@@ -1,7 +1,6 @@
 import commander from "commander";
 import fs from "fs";
 import path from "path";
-import shelljs from "shelljs";
 import { Bedrock, write } from "../../config";
 import { build } from "../../lib/commandBuilder";
 import {
@@ -64,35 +63,12 @@ export const initialize = async (
   logger.info(`Initializing project Bedrock project ${absProjectRoot}`);
 
   // Initialize all paths
-  await generateBedrockFile(
-    absProjectRoot,
-    [],
-    defaultRing ? [defaultRing] : []
-  );
+  generateBedrockFile(absProjectRoot, [], defaultRing ? [defaultRing] : []);
   await generateMaintainersFile(absProjectRoot, []);
   await generateHldLifecyclePipelineYaml(absProjectRoot);
   generateGitIgnoreFile(absProjectRoot, "spk.log");
 
   logger.info(`Project initialization complete!`);
-};
-
-/**
- * Helper function for listing files/dirs in a path
- *
- * @param dir path-like string; what you would pass to ls in bash
- */
-const ls = async (dir: string): Promise<string[]> => {
-  const lsRet = shelljs.ls(dir);
-  if (lsRet.code !== 0) {
-    logger.error(lsRet.stderr);
-    throw new Error(
-      `Error listing files in ${dir}; Ensure this directory exists or specify a different one with the --packages-dir option.`
-    );
-  }
-
-  // Returned object includes piping functions as well; strings represent the actual output of the function
-  const filesAndDirectories = lsRet.filter(out => typeof out === "string");
-  return filesAndDirectories;
 };
 
 /**
@@ -113,8 +89,7 @@ const generateMaintainersFile = async (
   const [gitName, gitEmail] = await Promise.all(
     ["name", "email"].map(async field => {
       try {
-        const gitField = await exec("git", ["config", `user.${field}`]);
-        return gitField;
+        return await exec("git", ["config", `user.${field}`]);
       } catch (_) {
         logger.warn(
           `Unable to parse git.${field} from host. Leaving blank value in maintainers.yaml file`
@@ -177,7 +152,7 @@ const generateMaintainersFile = async (
  * @param packagePaths Array of package paths
  * @param defaultRings Array of default rings
  */
-const generateBedrockFile = async (
+const generateBedrockFile = (
   projectPath: string,
   packagePaths: string[],
   defaultRings: string[] = []
@@ -186,38 +161,39 @@ const generateBedrockFile = async (
   const absPackagePaths = packagePaths.map(p => path.resolve(p));
   logger.info(`Generating bedrock.yaml file in ${absProjectPath}`);
 
+  const basedRingObject: { [ring: string]: { isDefault: boolean } } = {};
+  const rings = defaultRings.reduce((defaults, ring) => {
+    defaults[ring] = {
+      isDefault: true
+    };
+    return defaults;
+  }, basedRingObject);
+
+  const baseBedrockFile: IBedrockFile = {
+    rings,
+    services: {}
+  };
+
   // Populate bedrock file
-  const bedrockFile: IBedrockFile = absPackagePaths.reduce<IBedrockFile>(
-    (file, absPackagePath) => {
-      const relPathToPackageFromRoot = path.relative(
-        absProjectPath,
-        absPackagePath
-      );
+  const bedrockFile = absPackagePaths.reduce((file, absPackagePath) => {
+    const relPathToPackageFromRoot = path.relative(
+      absProjectPath,
+      absPackagePath
+    );
 
-      const helm: IHelmConfig = {
-        chart: {
-          branch: "",
-          git: "",
-          path: ""
-        }
-      };
+    const helm: IHelmConfig = {
+      chart: {
+        branch: "",
+        git: "",
+        path: ""
+      }
+    };
 
-      file.services["./" + relPathToPackageFromRoot] = {
-        helm
-      };
-      return file;
-    },
-    {
-      rings: defaultRings.reduce<{ [ring: string]: { isDefault: boolean } }>(
-        (defaults, ring) => {
-          defaults[ring] = { isDefault: true };
-          return defaults;
-        },
-        {}
-      ),
-      services: {}
-    }
-  );
+    file.services["./" + relPathToPackageFromRoot] = {
+      helm
+    };
+    return file;
+  }, baseBedrockFile);
 
   // Check if a bedrock.yaml already exists; skip write if present
   const bedrockFilePath = path.join(absProjectPath, "bedrock.yaml");

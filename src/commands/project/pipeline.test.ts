@@ -1,3 +1,4 @@
+import { cloneDeep } from "lodash";
 import { disableVerboseLogging, enableVerboseLogging } from "../../logger";
 
 jest.mock("../../lib/pipelines/pipelines");
@@ -8,11 +9,11 @@ import {
   queueBuild
 } from "../../lib/pipelines/pipelines";
 
-import { logger } from "@azure/identity";
 import {
+  ICommandOptions,
   installLifecyclePipeline,
-  isValidConfig,
-  requiredPipelineVariables
+  requiredPipelineVariables,
+  validateValues
 } from "./pipeline";
 
 beforeAll(() => {
@@ -24,30 +25,29 @@ afterAll(() => {
 });
 
 describe("validate pipeline config", () => {
-  const configValues: any[] = [
-    "testOrg",
-    "testDevopsProject",
-    "testPipeline",
-    "repoName",
-    "https:/repoulr",
-    "https://hldurl",
-    "https://buildscript",
-    "af8e99c1234ef93e8c4365b1dc9bd8d9ba987d3"
-  ];
+  const configValues: ICommandOptions = {
+    buildScriptUrl: "https://buildscript",
+    devopsProject: "testDevopsProject",
+    hldUrl: "https://hldurl",
+    orgName: "testOrg",
+    personalAccessToken: "af8e99c1234ef93e8c4365b1dc9bd8d9ba987d3",
+    pipelineName: "testPipeline",
+    repoName: "repoName",
+    repoUrl: "https:/repoulr"
+  };
 
-  it("config is valid", () => {
-    expect(isValidConfig.apply(undefined, configValues as any)).toBe(true);
+  it("config is valid", async () => {
+    const result = validateValues(configValues);
+    expect(result.length).toBe(0);
   });
 
-  it("undefined values", () => {
-    for (const i of configValues.keys()) {
-      const configValuesWithInvalidValue = configValues.map((value, j) =>
-        i === j ? undefined : value
-      );
-      expect(
-        isValidConfig.apply(undefined, configValuesWithInvalidValue as any)
-      ).toBe(false);
-    }
+  it("undefined values", async () => {
+    Object.getOwnPropertyNames(configValues).forEach(k => {
+      const invalidValues: ICommandOptions = cloneDeep(configValues);
+      invalidValues[k] = undefined;
+      const result = validateValues(invalidValues);
+      expect(result.length).toBe(1);
+    });
   });
 });
 
@@ -75,86 +75,48 @@ describe("required pipeline variables", () => {
   });
 });
 
+const testCreatePipeline = async (timesCall?: number) => {
+  const exitFn = jest.fn();
+  await installLifecyclePipeline(
+    {
+      buildScriptUrl: "buildScriptUrl",
+      devopsProject: "pipelineName",
+      hldUrl: "hldRepoUrl",
+      orgName: "orgName",
+      personalAccessToken: "PAT",
+      pipelineName: "azDoProject",
+      repoName: "repoName",
+      repoUrl: "repoUrl"
+    },
+    exitFn
+  );
+
+  if (timesCall !== undefined) {
+    expect(exitFn).toBeCalledTimes(timesCall);
+  }
+};
+
 describe("create hld to manifest pipeline test", () => {
   it("should create a pipeline", async () => {
     (createPipelineForDefinition as jest.Mock).mockReturnValue({ id: 10 });
-
-    const exitFn = jest.fn();
-    await installLifecyclePipeline(
-      "orgName",
-      "PAT",
-      "pipelineName",
-      "repoName",
-      "repoUrl",
-      "hldRepoUrl",
-      "azDoProject",
-      "buildScriptUrl",
-      exitFn
-    );
-
-    expect(exitFn).toBeCalledTimes(0);
+    await testCreatePipeline(0);
   });
-
   it("should fail if the build client cant be instantiated", async () => {
     (getBuildApiClient as jest.Mock).mockReturnValue(Promise.reject());
-
-    const exitFn = jest.fn();
-    await installLifecyclePipeline(
-      "orgName",
-      "PAT",
-      "pipelineName",
-      "repoName",
-      "repoUrl",
-      "hldRepoUrl",
-      "azDoProject",
-      "buildScriptUrl",
-      exitFn
-    );
-
-    expect(exitFn).toBeCalledTimes(1);
+    await testCreatePipeline(1);
   });
-
   it("should fail if the pipeline definition cannot be created", async () => {
     (getBuildApiClient as jest.Mock).mockReturnValue({});
     (createPipelineForDefinition as jest.Mock).mockReturnValue(
       Promise.reject()
     );
-
-    const exitFn = jest.fn();
-    await installLifecyclePipeline(
-      "orgName",
-      "PAT",
-      "pipelineName",
-      "repoName",
-      "repoUrl",
-      "hldRepoUrl",
-      "azDoProject",
-      "buildScriptUrl",
-      exitFn
-    );
-
-    expect(exitFn).toBeCalledTimes(1);
+    await testCreatePipeline(1);
   });
-
   it("should fail if a build cannot be queued on the pipeline", async () => {
     (getBuildApiClient as jest.Mock).mockReturnValue({});
     (createPipelineForDefinition as jest.Mock).mockReturnValue({ id: 10 });
     (queueBuild as jest.Mock).mockReturnValue(Promise.reject());
-
-    const exitFn = jest.fn();
-    await installLifecyclePipeline(
-      "orgName",
-      "PAT",
-      "pipelineName",
-      "repoName",
-      "repoUrl",
-      "hldRepoUrl",
-      "azDoProject",
-      "buildScriptUrl",
-      exitFn
-    );
-
-    expect(exitFn).toBeCalledTimes(1);
+    await testCreatePipeline(1);
   });
 
   it("should fail if a build definition id doesn't exist", async () => {
@@ -163,29 +125,6 @@ describe("create hld to manifest pipeline test", () => {
       fakeProperty: "temp"
     });
     (queueBuild as jest.Mock).mockReturnValue(Promise.reject());
-
-    const exitFn = jest.fn();
-    let hasError = false;
-
-    try {
-      await installLifecyclePipeline(
-        "orgName",
-        "PAT",
-        "pipelineName",
-        "repoName",
-        "repoUrl",
-        "hldRepoUrl",
-        "azDoProject",
-        "buildScriptUrl",
-        exitFn
-      );
-    } catch (error) {
-      const builtDefnString = JSON.stringify({ fakeProperty: "temp" });
-      expect(error.message).toBe(
-        `Invalid BuildDefinition created, parameter 'id' is missing from ${builtDefnString}`
-      );
-      hasError = true;
-    }
-    expect(hasError).toBe(true);
+    await testCreatePipeline(1);
   });
 });

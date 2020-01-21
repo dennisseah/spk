@@ -2,11 +2,11 @@
   "command": "init",
   "alias": "i",
   "description": "Initialize your hld repository. Will add the manifest-generation.yaml file to your working directory/repository if it does not already exist.",
-  "options": {
-    "git-push": {
+  "options": [
+    {
       "arg": "--git-push",
       "description": "SPK CLI will try to commit and push these changes to a new origin/branch.",
       "defaultValue": false
     }
-  }
+  ]
 }

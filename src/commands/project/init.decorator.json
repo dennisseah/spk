@@ -2,11 +2,11 @@
   "command": "init",
   "alias": "i",
   "description": "Initialize your spk repository. Will add starter bedrock.yaml, maintainers.yaml, hld-lifecycle.yaml, and .gitignore files to your project.",
-  "options": {
-    "branch-name": {
+  "options": [
+    {
       "arg": "-r, --default-ring <branch-name>",
       "description": "Specify a default ring; this corresponds to a default branch which you wish to push initial revisions to",
       "defaultValue": "master"
     }
-  }
+  ]
 }

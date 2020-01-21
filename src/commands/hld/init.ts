@@ -17,7 +17,7 @@ interface ICommandOptions {
 
 const execute = async (opts: ICommandOptions) => {
   const { gitPush = false } = opts;
-  // gitPath will always be boolean type, this is enforced by commander.
+  // gitPath will always be boolean type, this is enforced by commander library.
   const projectPath = process.cwd();
 
   try {
@@ -32,7 +32,7 @@ const execute = async (opts: ICommandOptions) => {
   }
 };
 
-export const commandDecorator = (command: commander.Command): void => {
+export const commandDecorator = (command: commander.Command) => {
   build(command, decorator).action(execute);
 };
 

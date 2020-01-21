@@ -1,5 +1,6 @@
 // imports
 import fs from "fs";
+import { cloneDeep } from "lodash";
 import os from "os";
 import path from "path";
 import uuid from "uuid/v4";
@@ -14,7 +15,7 @@ import { IBedrockFile } from "../../types";
 import {
   create,
   setVariableGroupInBedrockFile,
-  validateRequiredArguments
+  validateValues
 } from "./create-variable-group";
 
 beforeAll(() => {
@@ -43,98 +44,44 @@ const accessopts: IAzureDevOpsOpts = {
 };
 
 describe("validateRequiredArguments", () => {
-  test("Should fail when all required arguments specified with empty values", async () => {
+  test("Should fail when all required arguments specified with empty values or undefined", async () => {
     const opts: IAzureDevOpsOpts = {};
 
-    const errors: string[] = validateRequiredArguments(
-      "",
-      "",
-      "",
-      "",
-      "",
-      opts
-    );
-    logger.info(`length: ${errors.length}`);
-    expect(errors.length).toBe(8);
+    ["", undefined].forEach(val => {
+      const errors = validateValues({
+        hldRepoUrl: val,
+        orgName: val,
+        personalAccessToken: val,
+        project: val,
+        registryName: val,
+        servicePrincipalId: val,
+        servicePrincipalPassword: val,
+        tenant: val
+      });
+      logger.info(`length: ${errors.length}`);
+      expect(errors.length).toBe(8);
+    });
   });
 
-  test("Should fail when all required arguments are not specified", async () => {
-    const opts: IAzureDevOpsOpts = {};
-    const errors: string[] = validateRequiredArguments(
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      opts
-    );
-    logger.info(`length: ${errors.length}`);
-    expect(errors.length).toBe(8);
-  });
-
-  test("Should fail when registryName argument is not specified", async () => {
-    const errors: string[] = validateRequiredArguments(
-      undefined,
+  test("Should fail when one argument is not specified", async () => {
+    const values: { [key: string]: string | undefined } = {
       hldRepoUrl,
+      orgName,
+      personalAccessToken,
+      project,
+      registryName,
       servicePrincipalId,
       servicePrincipalPassword,
-      tenant,
-      accessopts
-    );
-    logger.info(`length: ${errors.length}`);
-    expect(errors.length).toBe(1);
-  });
+      tenant
+    };
 
-  test("Should fail when hldRepoUrl argument is not specified", async () => {
-    const errors: string[] = validateRequiredArguments(
-      registryName,
-      undefined,
-      servicePrincipalId,
-      servicePrincipalPassword,
-      tenant,
-      accessopts
-    );
-    logger.info(`length: ${errors.length}`);
-    expect(errors.length).toBe(1);
-  });
-
-  test("Should fail when servicePrincipalId argument is not specified", async () => {
-    const errors: string[] = validateRequiredArguments(
-      registryName,
-      hldRepoUrl,
-      undefined,
-      servicePrincipalPassword,
-      tenant,
-      accessopts
-    );
-    logger.info(`length: ${errors.length}`);
-    expect(errors.length).toBe(1);
-  });
-
-  test("Should fail when servicePrincipalPassword argument is not specified", async () => {
-    const errors: string[] = validateRequiredArguments(
-      registryName,
-      hldRepoUrl,
-      servicePrincipalId,
-      undefined,
-      tenant,
-      accessopts
-    );
-    logger.info(`length: ${errors.length}`);
-    expect(errors.length).toBe(1);
-  });
-
-  test("Should fail when tenant argument is not specified", async () => {
-    const errors: string[] = validateRequiredArguments(
-      registryName,
-      hldRepoUrl,
-      servicePrincipalId,
-      servicePrincipalPassword,
-      undefined,
-      accessopts
-    );
-    logger.info(`length: ${errors.length}`);
-    expect(errors.length).toBe(1);
+    Object.getOwnPropertyNames(values).forEach(k => {
+      const clone = cloneDeep(values);
+      clone[k] = undefined;
+      const errors = validateValues(clone);
+      logger.info(`length: ${errors.length}`);
+      expect(errors.length).toBe(1);
+    });
   });
 });
 
@@ -149,7 +96,7 @@ describe("create", () => {
     let invalidDataError: Error | undefined;
     try {
       logger.info("calling create");
-      await create("", "", "", "", "", "", accessOpts);
+      await create("", {}, accessOpts);
     } catch (err) {
       invalidDataError = err;
     }
@@ -168,11 +115,13 @@ describe("create", () => {
       logger.info("calling create");
       await create(
         variableGroupName,
-        registryName,
-        hldRepoUrl,
-        servicePrincipalId,
-        servicePrincipalPassword,
-        tenant,
+        {
+          hldRepoUrl,
+          registryName,
+          servicePrincipalId,
+          servicePrincipalPassword,
+          tenant
+        },
         accessOpts
       );
     } catch (err) {

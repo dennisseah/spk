@@ -1,3 +1,4 @@
+import { cloneDeep } from "lodash";
 import { disableVerboseLogging, enableVerboseLogging } from "../../logger";
 
 jest.mock("../../lib/pipelines/pipelines");
@@ -9,9 +10,10 @@ import {
 } from "../../lib/pipelines/pipelines";
 
 import {
+  ICommandOptions,
   installHldToManifestPipeline,
-  isValidConfig,
-  requiredPipelineVariables
+  requiredPipelineVariables,
+  validateValues
 } from "./pipeline";
 
 beforeAll(() => {
@@ -47,70 +49,61 @@ describe("required pipeline variables", () => {
 });
 
 describe("validate pipeline config", () => {
-  const configValues: any[] = [
-    "testOrg",
-    "testDevopsProject",
-    "testPipeline",
-    "https://manifestulr",
-    "testHld",
-    "https://hldurl",
-    "https://buildscript",
-    "af8e99c1234ef93e8c4365b1dc9bd8d9ba987d3"
-  ];
+  const configValues: ICommandOptions = {
+    buildScriptUrl: "https://buildscript",
+    devopsProject: "testDevopsProject",
+    hldName: "testHld",
+    hldUrl: "https://hldurl",
+    manifestUrl: "https://manifestulr",
+    orgName: "testOrg",
+    personalAccessToken: "af8e99c1234ef93e8c4365b1dc9bd8d9ba987d3",
+    pipelineName: "testPipeline"
+  };
 
   it("config is valid", () => {
-    expect(isValidConfig.apply(undefined, configValues as any)).toBe(true);
+    expect(validateValues(configValues).length).toBe(0);
   });
 
   it("undefined values", () => {
-    for (const i of configValues.keys()) {
-      const configValuesWithInvalidValue = configValues.map((value, j) =>
-        i === j ? undefined : value
-      );
-      expect(
-        isValidConfig.apply(undefined, configValuesWithInvalidValue as any)
-      ).toBe(false);
-    }
+    // TOFIX: cannot find a better way to do this.
+    Object.getOwnPropertyNames(configValues).forEach(k => {
+      const invalidValues: ICommandOptions = cloneDeep(configValues);
+      invalidValues[k] = undefined;
+      expect(validateValues(invalidValues).length).toBe(1);
+    });
   });
 });
+
+const testCreatePipeline = async (timesCall?: number) => {
+  const exitFn = jest.fn();
+  await installHldToManifestPipeline(
+    {
+      buildScriptUrl: "buildScriptUrl",
+      devopsProject: "project",
+      hldName: "hldRepoName",
+      hldUrl: "hldRepoUrl", // TOFIX: do we need to validate URL format?
+      manifestUrl: "manifestRepoUrl", // TOFIX: do we need to validate URL format?
+      orgName: "orgName",
+      personalAccessToken: "personalAccessToken",
+      pipelineName: "pipelineName"
+    },
+    exitFn
+  );
+
+  if (timesCall) {
+    expect(exitFn).toBeCalledTimes(timesCall);
+  }
+};
 
 describe("create hld to manifest pipeline test", () => {
   it("should create a pipeline", async () => {
     (createPipelineForDefinition as jest.Mock).mockReturnValue({ id: 10 });
-
-    const exitFn = jest.fn();
-    await installHldToManifestPipeline(
-      "orgName",
-      "personalAccessToken",
-      "hldRepoName",
-      "hldRepoUrl",
-      "manifestRepoUrl",
-      "project",
-      "pipelineName",
-      "buildScriptUrl",
-      exitFn
-    );
-
-    expect(exitFn).toBeCalledTimes(0);
+    await testCreatePipeline(0);
   });
 
   it("should fail if the build client cant be instantiated", async () => {
     (getBuildApiClient as jest.Mock).mockReturnValue(Promise.reject());
-
-    const exitFn = jest.fn();
-    await installHldToManifestPipeline(
-      "orgName",
-      "personalAccessToken",
-      "hldRepoName",
-      "hldRepoUrl",
-      "manifestRepoUrl",
-      "project",
-      "pipelineName",
-      "buildScriptUrl",
-      exitFn
-    );
-
-    expect(exitFn).toBeCalledTimes(1);
+    await testCreatePipeline(1);
   });
 
   it("should fail if the pipeline definition cannot be created", async () => {
@@ -118,41 +111,13 @@ describe("create hld to manifest pipeline test", () => {
     (createPipelineForDefinition as jest.Mock).mockReturnValue(
       Promise.reject()
     );
-
-    const exitFn = jest.fn();
-    await installHldToManifestPipeline(
-      "orgName",
-      "personalAccessToken",
-      "hldRepoName",
-      "hldRepoUrl",
-      "manifestRepoUrl",
-      "project",
-      "pipelineName",
-      "buildScriptUrl",
-      exitFn
-    );
-
-    expect(exitFn).toBeCalledTimes(1);
+    await testCreatePipeline(1);
   });
 
   it("should fail if a build cannot be queued on the pipeline", async () => {
     (getBuildApiClient as jest.Mock).mockReturnValue({});
     (createPipelineForDefinition as jest.Mock).mockReturnValue({ id: 10 });
     (queueBuild as jest.Mock).mockReturnValue(Promise.reject());
-
-    const exitFn = jest.fn();
-    await installHldToManifestPipeline(
-      "orgName",
-      "personalAccessToken",
-      "hldRepoName",
-      "hldRepoUrl",
-      "manifestRepoUrl",
-      "project",
-      "pipelineName",
-      "buildScriptUrl",
-      exitFn
-    );
-
-    expect(exitFn).toBeCalledTimes(1);
+    await testCreatePipeline(1);
   });
 });
